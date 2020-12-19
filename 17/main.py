@@ -1,77 +1,75 @@
 import itertools
 
 class Map:   
-    def __init__(self, min, max, map):
-        self.min = min
-        self.max = max
-        self.map = map
+    def __init__(self, active: set, dims: int):
+        self.active = active
+        self.dims = dims
+
+    def bounds(self):
+        def swap(idx, axis, value, f):
+            minmax[idx][axis] = f(value, minmax[idx][axis])
+
+        minmax = [[1000000000] * self.dims, [-1000000000] * self.dims]
+
+        for coord in self.active:
+            for axis, value in enumerate(coord):
+                swap(0, axis, value, min)
+                swap(1, axis, value, max)
+
+        return tuple(minmax[0]), tuple(minmax[1])
 
     def get(self, coord):
-        return self.map.get(coord, '.')
+        return '#' if coord in self.active else '.'
 
     def set(self, coord, value):
-        def swap(a, b, f):
-            xa, ya, za = a
-            xb, yb, zb = b
-            return f(xa,xb), f(ya, yb), f(za, zb)
-        
-        self.min = swap(self.min, coord, min)
-        self.max = swap(self.max, coord, max)
-        self.map[coord] = value
+        if value == '#':
+            self.active.add(coord)
+        else: 
+            self.active.discard(coord)
 
     def count_neighbors(self, coord):
         def rng(axis): 
             return range(coord[axis]-1, coord[axis]+2)
 
         c = 0
-        for n in itertools.product(rng(0), rng(1), rng(2)):
+        for n in itertools.product(*[rng(i) for i,_ in enumerate(coord)]):
             if n != coord and self.get(n) == '#':
                 c += 1
         return c
 
-    def dump(self):
-        def rng(axis):
-            return range(self.min[axis], self.max[axis] + 1)
-
-        for z in rng(2):
-            for y in rng(1):
-                line = ''.join([ self.map.get((x,y,z)) for x in rng(0)])
-                print(line)
-
-            print()
-
-
     def clone(self):
-        return Map(self.min, self.max, self.map.copy())
+        return Map(self.active.copy(), self.dims)
 
     @staticmethod
-    def init(grid: str):
-        map = dict()
+    def init(grid: str, dims: int):
+        active = set()
 
         grid = grid.splitlines()
+        suffix = [0] * (dims - 2)
 
         y = len(grid)
         x = len(grid[0])
-        min = (0, 0, 0)
-        max = (x - 1, y - 1, 0)
 
         for y, row in enumerate(grid):
             for x, value in enumerate(row):
-                map[(x,y,0)] = value
+                if value == '#':
+                    active.add((x,y,*suffix))
         
-        return Map(min, max, map)
+        return Map(active, dims)
 
 
     @staticmethod
-    def simulate(grid, rounds):
-        def rng(axis):
-            return range(map.min[axis]- 1, map.max[axis] + 2)
-        
-        map = Map.init(grid)
+    def simulate(grid, rounds, dims):
+        map = Map.init(grid, dims)
 
         for _ in range(rounds):
             clone = map.clone()
-            for coord in itertools.product(rng(0), rng(1), rng(2)):
+            min, max = map.bounds()
+
+            def rng(axis):
+                return range(min[axis]- 1, max[axis] + 2)
+  
+            for coord in itertools.product(*[rng(i) for i in range(map.dims)]):
                 v = map.get(coord)
                 n = map.count_neighbors(coord)
 
@@ -82,7 +80,7 @@ class Map:
 
             map = clone
 
-        return len(list(filter(lambda x: x == '#', map.map.values())))
+        return len(map.active)
 
 
 input = """.#.
@@ -92,4 +90,4 @@ input = """.#.
 with open('input.txt') as file:
     input = file.read()
 
-print(Map.simulate(input, 6))
+print(Map.simulate(input, 6, 4))
